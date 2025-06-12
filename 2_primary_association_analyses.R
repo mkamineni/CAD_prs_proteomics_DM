@@ -24,9 +24,10 @@ print(unique(df_inc$alc))
 # Make dataframes of all CAD, diabetes, and non-diabetes
 #df_cad_dm <- df_inc[df_inc$dm2_prev==1, ]
 #df_cad_no_dm <- df_inc[df_inc$dm2_prev==0, ]
-df_cad_dm <- df_inc[df_inc$a1c>=48, ]
-df_cad_no_dm <- df_inc[df_inc$a1c<48, ]
 df_cad_all <- df_inc
+df_cad_all$dm <- ifelse(df_cad_all$a1c >= 48 | df_cad_all$dm2_prev==1, 1, 0)
+df_cad_dm <- df_cad_all[df_cad_all$dm == 1, ]
+df_cad_no_dm <- df_cad_all[df_cad_all$dm == 0, ]
 
 print(nrow(df_cad_dm))
 print(nrow(df_cad_no_dm))
@@ -37,20 +38,76 @@ proteins <- colnames(df_cad_all)[which(colnames(df_cad_all) == "CLIP2"): which(c
 #general_feat <- c("cad_prs", "age", "Sex_numeric", "mergedrace", "PC1", "PC2", "PC3", "PC4", "PC5", "PC6", "PC7", "PC8", "PC9", "PC10", "ever_smoked", "BMI_final", "SBP_final", "antihtnbase", "tchol_final", "hdl_final", "cholmed", "tdi_log_final", "creat_final")
 general_feat <- c("cad_prs", "age", "Sex_numeric", "PC1", "PC2", "PC3", "PC4", "PC5", "PC6", "PC7", "PC8", "PC9", "PC10")
 
+# make final data frame
+columns = c("protein", "all_coef", "all_lower", "all_upper", "all_pval", "all_inter_coef", "all_inter_lower", "all_inter_upper", "all_inter_pval", "dm_coef", "dm_lower", "dm_upper", "dm_pval", "nodm_coef", "nodm_lower", "nodm_upper", "nodm_pval")
+all_prot_coefs <- data.frame(matrix(nrow=0, ncol=length(columns)))
+colnames(all_prot_coefs) = columns
+num_proteins <- length(proteins)
+print(num_proteins)
 for (protein in proteins) {
-	model_data <- cbind(df_cad_all[, ..general_feat], proteins)
+        feat <- append(general_feat, protein)
+        protein <- make.names(protein)
+        
+	if (protein %in% colnames(df_cad_all)){
+		
+		# all cad model
+		cad_feat <- append(feat, "dm")
+		model_data <- df_cad_all[, ..cad_feat]
 
-	cad_model <- lm(formula = cad_prs ~ ., data = model_data)
+		cad_model <- lm(as.formula(paste(protein, "~ . + cad_prs:dm")), data = model_data)
 
-	# Print the coefficients
-	cat("Coefficients:\n")	
-	coef_cad <- coef(cad_model)
-	ci_cad <- confint(cad_model)
-	print(ci_cad)
-	cad_feat <- names(coef_cad)
+		summary_model <- summary(cad_model)
+		all_coef <- summary_model$coefficients["cad_prs", "Estimate"]
+		all_pval <- summary_model$coefficients["cad_prs", "Pr(>|t|)"]
+		all_confint <- confint(cad_model)
+		all_lower <- all_confint["cad_prs", 1]
+		all_upper <- all_confint["cad_prs", 2]
+
+                all_inter_coef <- summary_model$coefficients["cad_prs:dm", "Estimate"]
+                all_inter_pval <- summary_model$coefficients["cad_prs:dm", "Pr(>|t|)"]
+                all_inter_confint <- confint(cad_model)
+                all_inter_lower <- all_inter_confint["cad_prs:dm", 1]
+                all_inter_upper <- all_inter_confint["cad_prs:dm", 2]
+
+		# dm model
+	       	dm_model_data <- df_cad_dm[, ..feat]
+                dm_model <- lm(as.formula(paste(protein, "~ .")), data = dm_model_data)
+
+
+		summary_model <- summary(dm_model)
+		dm_coef <- summary_model$coefficients["cad_prs", "Estimate"]
+		dm_pval <- summary_model$coefficients["cad_prs", "Pr(>|t|)"]
+		dm_confint <- confint(dm_model)
+		dm_lower <- dm_confint["cad_prs", 1]
+		dm_upper <- dm_confint["cad_prs", 2]
+
+        	# no dm model
+		nodm_model_data <- df_cad_no_dm[, ..feat]
+                nodm_model <- lm(as.formula(paste(protein, "~ .")), data = nodm_model_data)
+
+		summary_model <- summary(nodm_model)
+		nodm_coef <- summary_model$coefficients["cad_prs", "Estimate"]
+		nodm_pval <- summary_model$coefficients["cad_prs", "Pr(>|t|)"]
+		nodm_confint <- confint(nodm_model)
+		nodm_lower <- nodm_confint["cad_prs", 1]
+		nodm_upper <- nodm_confint["cad_prs", 2]
+
+        	# add new row to final df
+		all_prot_coefs[nrow(all_prot_coefs) + 1,] = list(protein, all_coef, all_lower, all_upper, all_pval, all_inter_coef, all_inter_lower, all_inter_upper, all_inter_pval, dm_coef, dm_lower, dm_upper, dm_pval, nodm_coef, nodm_lower, nodm_upper, nodm_pval)
+	} else {
+		print(protein)
+	}
 }
 
+all_prot_coefs <- all_prot_coefs[order(all_prot_coefs$dm_pval, decreasing=FALSE),]
 
+write.csv(all_prot_coefs, paste0(outdir, "all_dm_cohort_cad.csv"))
+
+all_prot_coefs <- all_prot_coefs[order(all_prot_coefs$nodm_pval, decreasing=FALSE),]
+
+write.csv(all_prot_coefs, paste0(outdir, "all_nodm_cohort_cad.csv"))
+
+stop()
 
 model_data <- cbind(df_cad_all[, ..general_feat], proteins)
 
