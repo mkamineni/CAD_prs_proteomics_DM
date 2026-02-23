@@ -106,33 +106,33 @@
   
   # 2e - Exclude participants with prevalent disease ####
 
+  #a <- a[a$cad_prev==0,]
+  # dim(a)                                                                                                
+  # [1] 45258  1564                                                                                       
+
+  #a <- a[a$hfail_prev==0,]
+  # dim(a)                                                                                                
+  # [1] 45053  1564                                                                                       
+
+  #a <- a[a$afib_prev==0,]
+  # dim(a)                                                                                                
+  # [1] 44372  1564                                                                                       
+
+  #a <- a[a$ao_sten_prev==0,]
+
   a <- a[a$cad_prev==0,]
   # dim(a)                                                                                                
   # [1] 45258  1564                                                                                       
 
-  a <- a[a$hfail_prev==0,]
+  #a <- a[a$hfail_prev==0,]
   # dim(a)                                                                                                
   # [1] 45053  1564                                                                                       
 
-  a <- a[a$afib_prev==0,]
+  #a <- a[a$afib_prev==0,]
   # dim(a)                                                                                                
   # [1] 44372  1564                                                                                       
 
-  a <- a[a$ao_sten_prev==0,]
-
-  a <- a[a$cad_prev==0,]
-  # dim(a)                                                                                                
-  # [1] 45258  1564                                                                                       
-
-  a <- a[a$hfail_prev==0,]
-  # dim(a)                                                                                                
-  # [1] 45053  1564                                                                                       
-
-  a <- a[a$afib_prev==0,]
-  # dim(a)                                                                                                
-  # [1] 44372  1564                                                                                       
-
-  a <- a[a$ao_sten_prev==0,]
+  #a <- a[a$ao_sten_prev==0,]
   # dim(a)                                                                                                
   # [1] 44313  1564                                                                                       
 

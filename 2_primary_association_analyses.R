@@ -18,6 +18,7 @@ df_inc$ever_smoked <- factor(df_inc$ever_smoked)
 df_inc$antihtnbase <- factor(df_inc$antihtnbase)
 df_inc$cholmed <- factor(df_inc$cholmed)
 
+print(nrow(df_inc))
 print(colnames(df_inc))
 print(unique(df_inc$alc))
 
