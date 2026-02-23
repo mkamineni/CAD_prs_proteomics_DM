@@ -14,6 +14,7 @@
 
 
   # 1b - Data.frame ####
+  include_cad = TRUE
 
   a <- fread("/medpop/esp/mkaminen/ukb_proteomics_cvd/input/ukb_proteomics_baseline_noexcl_noimput.tsv.gz")
   cad_prs_out <- fread("/medpop/esp/mkaminen/ukb_proteomics_cvd/input/CADprs.tsv.gz")  
@@ -119,8 +120,10 @@
   # [1] 44372  1564                                                                                       
 
   #a <- a[a$ao_sten_prev==0,]
+  if (!include_cad){
+  	a <- a[a$cad_prev==0,]
+  }
 
-  a <- a[a$cad_prev==0,]
   # dim(a)                                                                                                
   # [1] 45258  1564                                                                                       
 
@@ -236,17 +239,22 @@
 
   
 ### 7 - Write table  ####
-  
-  write.table(a, "/medpop/esp/mkaminen/ukb_proteomics_cvd/input/ukb_proteomics_baseline_excl_and_imput_noprevcvd.tsv", sep="\t", row.names=F, col.names=T, quote=F)
-  gzip("/medpop/esp/mkaminen/ukb_proteomics_cvd/input/ukb_proteomics_baseline_excl_and_imput_noprevcvd.tsv")
+  if (include_cad){
+        write.table(a, "/medpop/esp/mkaminen/ukb_proteomics_cvd/input/ukb_proteomics_baseline_excl_and_imput_withprevcvd.tsv", sep="\t", row.names=F, col.names=T, quote=F)
+	gzip("/medpop/esp/mkaminen/ukb_proteomics_cvd/input/ukb_proteomics_baseline_excl_and_imput_withprevcvd.tsv")
 
+  } else {
+  	write.table(a, "/medpop/esp/mkaminen/ukb_proteomics_cvd/input/ukb_proteomics_baseline_excl_and_imput_noprevcvd.tsv", sep="\t", row.names=F, col.names=T, quote=F)
+  	gzip("/medpop/esp/mkaminen/ukb_proteomics_cvd/input/ukb_proteomics_baseline_excl_and_imput_noprevcvd.tsv")
   
-### 8 - Quantify missingness  ####
+  
+	### 8 - Quantify missingness  ####
 
-  full <- fread("/medpop/esp/mkaminen/ukb_proteomics_cvd/input/ukb_proteomics_baseline_noexcl_noimput.tsv.gz")
-  notimputed <- merge(notimputed, full[,c("id", "PCOLCE", "CTSS", "NPM1", "TACSTD2")], by="id", all.x=T, all.y=F)
+  	full <- fread("/medpop/esp/mkaminen/ukb_proteomics_cvd/input/ukb_proteomics_baseline_noexcl_noimput.tsv.gz")
+  	notimputed <- merge(notimputed, full[,c("id", "PCOLCE", "CTSS", "NPM1", "TACSTD2")], by="id", all.x=T, all.y=F)
   
-  df_impcount <- data.frame(colname=names(colSums(is.na(notimputed))), missing_count=colSums(is.na(notimputed)))
-  rownames(df_impcount) <- NULL
-  df_impcount$missing_proportion <- df_impcount$missing_count / nrow(notimputed)
-  write.csv(df_impcount, "/medpop/esp/mkaminen/ukb_proteomics_cvd/missingness_basefile.csv", row.names=F)
+  	df_impcount <- data.frame(colname=names(colSums(is.na(notimputed))), missing_count=colSums(is.na(notimputed)))
+  	rownames(df_impcount) <- NULL
+  	df_impcount$missing_proportion <- df_impcount$missing_count / nrow(notimputed)
+  	write.csv(df_impcount, "/medpop/esp/mkaminen/ukb_proteomics_cvd/missingness_basefile.csv", row.names=F)
+  }
