@@ -1,4 +1,4 @@
-### 1 - Import Libraries and data frames ####
+#:q## 1 - Import Libraries and data frames ####
   # 1a - Libraries ####
 
 library(data.table)
@@ -6,10 +6,73 @@ library(boot)
 library(broom)
 library(dplyr)
 library(survival)
+library(splines)
 
-  # 1b - Load dataframe and make new dataframes with time-varying covariates
+# Helper functions
+# Function to convert cad_prs to spline in any dataset
+add_spline_formula <- function(df, outcome, spline_var = "cad_prs", interact_var = NULL) {
+	# Get all predictors except outcome
+	predictors <- setdiff(names(df), outcome)
+      
+        # Replace spline_var with ns(spline_var, df=4)
+	predictors <- sapply(predictors, function(x) {
+		if(x == spline_var) {
+			if(!is.null(interact_var)) {
+				# Interaction with another variable
+				paste0("ns(", spline_var, ", df=4):", interact_var)
+			} else{
+
+				paste0("ns(", spline_var, ", df=4)")
+			}
+		} else {
+			x
+		}
+	})
+									  
+	# Combine predictors
+	formula_text <- paste(outcome, "~", paste(predictors, collapse = " + ")) 
+	return(as.formula(formula_text))
+}
+
+# Helper function to extract "cumulative" effect
+extract_effect <- function(model, coef_pattern, spline=FALSE){
+	summary_model <- summary(model)
+  
+	if(spline){
+		# Find coefficients matching the pattern
+		idx <- grep(coef_pattern, rownames(summary_model$coefficients))
+    
+		# cumulative coefficient
+		coef_vec <- coef(model)[idx]
+		vcov_mat <- vcov(model)[idx, idx]
+		est <- sum(coef_vec)
+    
+		# approximate SE and CI
+		se <- sqrt(sum(vcov_mat))
+		ci_lower <- est - 1.96 * se
+		ci_upper <- est + 1.96 * se
+    
+		# approximate p-value using chi-squared (Wald test)
+		chisq <- (coef_vec %*% solve(vcov_mat) %*% coef_vec)[1,1]
+		pval <- pchisq(chisq, df=length(idx), lower.tail=FALSE)
+    	} else {
+		est <- summary_model$coefficients[coef_pattern, "Estimate"]
+		se <- summary_model$coefficients[coef_pattern, "Std. Error"]
+		pval <- summary_model$coefficients[coef_pattern, "Pr(>|t|)"]
+		ci <- confint(model)
+		ci_lower <- ci[coef_pattern, 1]
+		ci_upper <- ci[coef_pattern, 2]
+	}
+  	return(list(estimate=est, se=se, ci_lower=ci_lower, ci_upper=ci_upper, pval=pval))
+}
+
+# 1b - Load dataframe and make new dataframes with time-varying covariates
+spline <- TRUE
 
 outdir <- "/medpop/esp/mkaminen/ukb_proteomics_cvd/output/"
+if (spline) {
+	outdir <- paste0(outdir, "spline_")
+}
 
 df_inc <- fread("/medpop/esp/mkaminen/ukb_proteomics_cvd/input/ukb_proteomics_baseline_excl_and_imput_noprevcvd.tsv.gz")
 df_inc$Sex_numeric <- factor(df_inc$Sex_numeric)
@@ -47,56 +110,49 @@ num_proteins <- length(proteins)
 print(num_proteins)
 for (protein in proteins) {
         feat <- append(general_feat, protein)
-        protein <- make.names(protein)
+        protein_safe <- make.names(protein)
         
-	if (protein %in% colnames(df_cad_all)){
+	if (protein_safe %in% colnames(df_cad_all)){
 		
 		# all cad model
 		cad_feat <- append(feat, "dm")
 		model_data <- df_cad_all[, ..cad_feat]
+	       
+		cad_model <- if(spline){lm(add_spline_formula(model_data, outcome = protein_safe, interact_var = "dm"), data = model_data)} else {lm(as.formula(paste(protein_safe, "~ . + cad_prs:dm")), data = model_data)}
+    
+		res <- extract_effect(cad_model, coef_pattern = if(spline) "^ns\\(cad_prs" else "cad_prs", spline=spline)
+		all_coef <- res$estimate
+		all_pval <- res$pval
+		all_lower <- res$ci_lower
+		all_upper <- res$ci_upper
+		    
+		res_inter <- extract_effect(cad_model, coef_pattern = if(spline) "^ns\\(cad_prs.*:dm" else "cad_prs:dm", spline=spline)
+		all_inter_coef <- res_inter$estimate
+		all_inter_pval <- res_inter$pval
+		all_inter_lower <- res_inter$ci_lower
+		all_inter_upper <- res_inter$ci_upper
 
-		cad_model <- lm(as.formula(paste(protein, "~ . + cad_prs:dm")), data = model_data)
+		dm_model_data <- df_cad_dm[, ..feat]
+        	dm_model <- if(spline){lm(add_spline_formula(dm_model_data, outcome = protein_safe), data = dm_model_data)} else {lm(as.formula(paste(protein_safe, "~ .")), data = dm_model_data)}
+		res_dm <- extract_effect(dm_model, coef_pattern = if(spline) "^ns\\(cad_prs" else "cad_prs", spline=spline)
+		dm_coef <- res_dm$estimate
+		dm_pval <- res_dm$pval
+		dm_lower <- res_dm$ci_lower
+		dm_upper <- res_dm$ci_upper
 
-		summary_model <- summary(cad_model)
-		all_coef <- summary_model$coefficients["cad_prs", "Estimate"]
-		all_pval <- summary_model$coefficients["cad_prs", "Pr(>|t|)"]
-		all_confint <- confint(cad_model)
-		all_lower <- all_confint["cad_prs", 1]
-		all_upper <- all_confint["cad_prs", 2]
-
-                all_inter_coef <- summary_model$coefficients["cad_prs:dm", "Estimate"]
-                all_inter_pval <- summary_model$coefficients["cad_prs:dm", "Pr(>|t|)"]
-                all_inter_confint <- confint(cad_model)
-                all_inter_lower <- all_inter_confint["cad_prs:dm", 1]
-                all_inter_upper <- all_inter_confint["cad_prs:dm", 2]
-
-		# dm model
-	       	dm_model_data <- df_cad_dm[, ..feat]
-                dm_model <- lm(as.formula(paste(protein, "~ .")), data = dm_model_data)
-
-
-		summary_model <- summary(dm_model)
-		dm_coef <- summary_model$coefficients["cad_prs", "Estimate"]
-		dm_pval <- summary_model$coefficients["cad_prs", "Pr(>|t|)"]
-		dm_confint <- confint(dm_model)
-		dm_lower <- dm_confint["cad_prs", 1]
-		dm_upper <- dm_confint["cad_prs", 2]
-
-        	# no dm model
+		# no dm model
 		nodm_model_data <- df_cad_no_dm[, ..feat]
-                nodm_model <- lm(as.formula(paste(protein, "~ .")), data = nodm_model_data)
-
-		summary_model <- summary(nodm_model)
-		nodm_coef <- summary_model$coefficients["cad_prs", "Estimate"]
-		nodm_pval <- summary_model$coefficients["cad_prs", "Pr(>|t|)"]
-		nodm_confint <- confint(nodm_model)
-		nodm_lower <- nodm_confint["cad_prs", 1]
-		nodm_upper <- nodm_confint["cad_prs", 2]
+		nodm_model <- if(spline){lm(add_spline_formula(nodm_model_data, outcome = protein_safe), data = nodm_model_data)} else {lm(as.formula(paste(protein_safe, "~ .")), data = nodm_model_data)}
+		res_nodm <- extract_effect(nodm_model, coef_pattern = if(spline) "^ns\\(cad_prs" else "cad_prs", spline=spline)
+		nodm_coef <- res_nodm$estimate
+		nodm_pval <- res_nodm$pval
+		nodm_lower <- res_nodm$ci_lower
+		nodm_upper <- res_nodm$ci_upper
 
         	# add new row to final df
-		all_prot_coefs[nrow(all_prot_coefs) + 1,] = list(protein, all_coef, all_lower, all_upper, all_pval, all_inter_coef, all_inter_lower, all_inter_upper, all_inter_pval, dm_coef, dm_lower, dm_upper, dm_pval, nodm_coef, nodm_lower, nodm_upper, nodm_pval)
+		all_prot_coefs[nrow(all_prot_coefs) + 1,] = list(protein_safe, all_coef, all_lower, all_upper, all_pval, all_inter_coef, all_inter_lower, all_inter_upper, all_inter_pval, dm_coef, dm_lower, dm_upper, dm_pval, nodm_coef, nodm_lower, nodm_upper, nodm_pval)
 	} else {
-		print(protein)
+		print(protein_safe)
 	}
 }
 
@@ -224,16 +280,4 @@ axis(1, at = 1:length(plot_cad$Feat), labels = plot_cad$Feat, las = 2)
 arrows(1:length(plot_cad), plot_cad$CI_Lower, 1:length(plot_cad), plot_cad$Upper, angle = 90, code = 3, length = 0.1, col = "red")
 dev.off()
 
-
-
-### 6 - Merge data frames, restructure and write to csv ####
-  # 6a - Combine summary stats for base models of all outcomes to one data frame ####
-
-#adj_df <- select(adj_df, -c('std.error', 'statistic'))
-#colnames(adj_df) <- c('Protein', 'HR', 'P_Value', 'CI_Lower', 'CI_Upper', 'Outcome')
-#adj_df <- adj_df[,c('Protein', 'Outcome', 'HR', 'CI_Lower', 'CI_Upper', 'P_Value')]
-
-  # 6c - Write to csv ####
-
-#write.csv(adj_df, '/medpop/esp/mkaminen/ukb_proteomics_cvd/output/1_adj_no_prev_timevar_model_hr.csv')
 

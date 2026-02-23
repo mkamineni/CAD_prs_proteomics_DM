@@ -11,4 +11,5 @@ source ~/.my.bashrc
 cdpr
 Rscript /medpop/esp/mkaminen/CAD_prs_proteomics_DM/2_primary_association_analyses.R
 #Rscript /medpop/esp/mkaminen/CAD_prs_proteomics_DM/1_exclusion_imputation.R
+#Rscript /medpop/esp/mkaminen/CAD_prs_proteomics_DM/check_baseline_assoc.R
 
