@@ -18,9 +18,16 @@ df_inc$ever_smoked <- factor(df_inc$ever_smoked)
 df_inc$antihtnbase <- factor(df_inc$antihtnbase)
 df_inc$cholmed <- factor(df_inc$cholmed)
 
+# Standardize CAD PRS and age to mean=0, sd=1
+df_inc$cad_prs_std <- scale(df_inc$cad_prs)
+df_inc$age_std <- scale(df_inc$age)
+
 print(nrow(df_inc))
 print(colnames(df_inc))
 print(unique(df_inc$alc))
+
+# PC covariates string
+pc_covars <- paste(paste0("PC", 1:10), collapse = " + ")
 
 # age, cad_prev, cad_prs
 # want to find associatons between CAD ~ CAD PRS, CAD ~ age, CAD ~ sex
@@ -31,25 +38,25 @@ all_coefs <- data.frame(matrix(nrow=0, ncol=length(columns)))
 colnames(all_coefs) = columns
 
 # find association between CAD and CAD PRS
-cad_prs_model <- lm(as.formula(paste("cad_prev ~ cad_prs")), data = df_inc)
+cad_prs_model <- lm(as.formula(paste("cad_prev ~ cad_prs_std +", pc_covars)), data = df_inc)
 summary_model <- summary(cad_prs_model)
 print(summary_model)
-all_coef <- summary_model$coefficients["cad_prs", "Estimate"]
-all_pval <- summary_model$coefficients["cad_prs", "Pr(>|t|)"]
+all_coef <- summary_model$coefficients["cad_prs_std", "Estimate"]
+all_pval <- summary_model$coefficients["cad_prs_std", "Pr(>|t|)"]
 all_confint <- confint(cad_prs_model)
-all_lower <- all_confint["cad_prs", 1]
-all_upper <- all_confint["cad_prs", 2]
+all_lower <- all_confint["cad_prs_std", 1]
+all_upper <- all_confint["cad_prs_std", 2]
 all_coefs[nrow(all_coefs)+1, ] <- c("cad_prs", all_coef, all_lower, all_upper, all_pval)
 
 # find association between CAD and age
-cad_age_model <- lm(as.formula(paste("cad_prev ~ age")), data = df_inc)
+cad_age_model <- lm(as.formula(paste("cad_prev ~ age_std +", pc_covars)), data = df_inc)
 summary_model <- summary(cad_age_model)
 print(summary_model)
-all_coef <- summary_model$coefficients["age", "Estimate"]
-all_pval <- summary_model$coefficients["age", "Pr(>|t|)"]
+all_coef <- summary_model$coefficients["age_std", "Estimate"]
+all_pval <- summary_model$coefficients["age_std", "Pr(>|t|)"]
 all_confint <- confint(cad_age_model)
-all_lower <- all_confint["age", 1]
-all_upper <- all_confint["age", 2]
+all_lower <- all_confint["age_std", 1]
+all_upper <- all_confint["age_std", 2]
 all_coefs[nrow(all_coefs)+1, ] <- c("age", all_coef, all_lower, all_upper, all_pval)
 
 # find association between CAD and sex

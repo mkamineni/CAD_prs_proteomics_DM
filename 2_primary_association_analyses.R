@@ -17,20 +17,20 @@ add_spline_formula <- function(df, outcome, spline_var = "cad_prs", interact_var
         # Replace spline_var with ns(spline_var, df=4)
 	predictors <- sapply(predictors, function(x) {
 		if(x == spline_var) {
-			if(!is.null(interact_var)) {
-				# Interaction with another variable
-				paste0("ns(", spline_var, ", df=4):", interact_var)
-			} else{
-
-				paste0("ns(", spline_var, ", df=4)")
-			}
+			paste0("ns(", spline_var, ", df=4)")
 		} else {
 			x
 		}
 	})
 									  
 	# Combine predictors
-	formula_text <- paste(outcome, "~", paste(predictors, collapse = " + ")) 
+	formula_text <- paste(outcome, "~", paste(predictors, collapse = " + "))
+	
+	# add interaction term separately if needed
+	if (!is.null(interact_var)) {
+		formula_text <- paste(formula_text, "+ ns(", spline_var, ", df=4):", interact_var)
+	}
+
 	return(as.formula(formula_text))
 }
 
@@ -48,12 +48,16 @@ extract_effect <- function(model, coef_pattern, spline=FALSE){
 		est <- sum(coef_vec)
     
 		# approximate SE and CI
-		se <- sqrt(sum(vcov_mat))
+		se <- if(length(idx) == 1) sqrt(vcov_mat) else sqrt(sum(vcov_mat))
 		ci_lower <- est - 1.96 * se
 		ci_upper <- est + 1.96 * se
     
 		# approximate p-value using chi-squared (Wald test)
-		chisq <- (coef_vec %*% solve(vcov_mat) %*% coef_vec)[1,1]
+		chisq <- if(length(idx) == 1){
+			(coef_vec^2 / vcov_mat)[1]
+		} else {
+			(coef_vec %*% solve(vcov_mat) %*% coef_vec)[1,1]
+		}
 		pval <- pchisq(chisq, df=length(idx), lower.tail=FALSE)
     	} else {
 		est <- summary_model$coefficients[coef_pattern, "Estimate"]
@@ -126,7 +130,8 @@ for (protein in proteins) {
 		all_lower <- res$ci_lower
 		all_upper <- res$ci_upper
 		    
-		res_inter <- extract_effect(cad_model, coef_pattern = if(spline) "^ns\\(cad_prs.*:dm" else "cad_prs:dm", spline=spline)
+		print(rownames(summary(cad_model)$coefficients))
+		res_inter <- extract_effect(cad_model, coef_pattern = if(spline) ":dm$" else "cad_prs:dm", spline=spline)
 		all_inter_coef <- res_inter$estimate
 		all_inter_pval <- res_inter$pval
 		all_inter_lower <- res_inter$ci_lower
@@ -164,120 +169,5 @@ all_prot_coefs <- all_prot_coefs[order(all_prot_coefs$nodm_pval, decreasing=FALS
 
 write.csv(all_prot_coefs, paste0(outdir, "all_nodm_cohort_cad.csv"))
 
-stop()
-
-model_data <- cbind(df_cad_all[, ..general_feat], proteins)
-
-cad_model <- lm(formula = cad_prs ~ ., data = model_data)
-
-# Print the coefficients
-cat("Coefficients:\n")
-coef_cad <- coef(cad_model)
-ci_cad <- confint(cad_model)
-print(ci_cad)
-cad_feat <- names(coef_cad)
-
-# Print the residuals
-cat("\nResiduals:\n")
-resid_cad <- residuals(cad_model)
-
-print("finished cad model")
-
-model_data <- cbind(df_cad_dm[, ..general_feat], proteins)
-
-cad_dm_model <- lm(formula = cad_prs ~ ., data = model_data)
-
-# Print the coefficients
-cat("Coefficients:\n")
-coef_cad_dm <- coef(cad_dm_model)
-ci_cad_dm <- confint(cad_dm_model)
-print(ci_cad_dm)
-cad_dm_feat <- names(coef_cad_dm)
-
-# Print the residuals
-cat("\nResiduals:\n")
-resid_cad_dm <- residuals(cad_dm_model)
-
-print("finished cad dm model")
-
-
-proteins_no_dm <- df_cad_no_dm[, which(colnames(df_cad_no_dm) == "CLIP2"): which(colnames(df_cad_no_dm) == "SCARB2")]
-
-general_feat <- c("cad_prs", "age", "Sex_numeric", "mergedrace", "PC1", "PC2", "PC3", "PC4", "PC5", "PC6", "PC7", "PC8", "PC9", "PC10", "ever_smoked", "BMI_final", "SBP_final", "antihtnbase", "tchol_final", "hdl_final", "cholmed", "tdi_log_final", "creat_final")
-
-model_data_no_dm <- cbind(df_cad_no_dm[, ..general_feat], proteins_no_dm)
-
-cad_no_dm_model <- lm(formula = cad_prs ~ ., data = model_data_no_dm)
-
-# Print the coefficients
-cat("Coefficients:\n")
-coef_cad_no_dm <- coef(cad_no_dm_model)
-ci_cad_no_dm <- confint(cad_no_dm_model)
-cad_no_dm_feat <- names(coef_cad_no_dm)
-
-
-# Print the residuals
-cat("\nResiduals:\n")
-resid_cad_no_dm <- residuals(cad_no_dm_model)
-print("finished cad no dm model")
-
-
-
-# Visualize into plots
-# Save data into csv
-p_values = summary(cad_model)$coefficients[,4]
-cad_csv <- data.frame(
-  Feat = names(coef_cad),
-  Coef = coef_cad,
-  CI_Lower = ci_cad[, 1],
-  CI_Upper = ci_cad[, 2],
-  P_value = p_values,
-  FDR = p.adjust(p_values, method = "BH")
-)
-
-cad_csv <- cad_csv[order(cad_csv$FDR, decreasing=FALSE),]
-write.csv(cad_csv, paste0(outdir, "cad_coef_limited.csv"))
-
-p_values = summary(cad_dm_model)$coefficients[,4]
-cad_dm_csv <- data.frame(
-  Feat = names(coef_cad_dm),
-  Coef = coef_cad_dm,
-  CI_Lower = ci_cad_dm[, 1],
-  CI_Upper = ci_cad_dm[, 2],
-  P_value = p_values,
-  FDR = p.adjust(p_values, method = "BH")
-)
-
-cad_dm_csv <- cad_dm_csv[order(cad_dm_csv$FDR, decreasing=FALSE),]  
-write.csv(cad_dm_csv, paste0(outdir, "cad_dm_coef.csv"))
-
-p_values = summary(cad_no_dm_model)$coefficients[,4]
-cad_no_dm_csv <- data.frame(
-  Feat = names(coef_cad_no_dm),
-  Coef = coef_cad_no_dm,
-  CI_Lower = ci_cad_no_dm[, 1],
-  CI_Upper = ci_cad_no_dm[, 2],
-  P_value = p_values, 
-  FDR = p.adjust(p_values, method = "BH")
-)
-
-cad_no_dm_csv <- cad_no_dm_csv[order(cad_no_dm_csv$FDR, decreasing=FALSE),]
-write.csv(cad_no_dm_csv, paste0(outdir, "cad_no_dm_coef.csv"))
-
-# create a plot to visualize coefficients for features and confidence intervals
-png(paste0(outdir, "cad_no_dm_coef.png"))
-lower_bound <- ci_cad_no_dm[, 1]
-upper_bound <- ci_cad_no_dm[, 2]
-plot_cad <- cad_no_dm_csv[cad_no_dm_csv$FDR<0.05, ]
-
-plot(plot_cad, ylim = range(c(plot_cad$CI_Lower, plot_cad$CI_Upper)),
-     main = "Coefficients (95% CI)", 
-     col = "blue", pch = 19, ylab = "Coefficient Value", xaxt = "n", xlab = "Coefficient Names")
-
-axis(1, at = 1:length(plot_cad$Feat), labels = plot_cad$Feat, las = 2)
-
-# Add arrows for the confidence interval
-arrows(1:length(plot_cad), plot_cad$CI_Lower, 1:length(plot_cad), plot_cad$Upper, angle = 90, code = 3, length = 0.1, col = "red")
-dev.off()
 
 
