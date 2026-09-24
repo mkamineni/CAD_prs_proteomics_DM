@@ -19,7 +19,7 @@ print(table(mergedrace = df$mergedrace))
 df$female <- as.integer(df$Sex_numeric == 0)
 df$white <- as.integer(df$mergedrace == names(which.max(table(df$mergedrace))))  # most common category = White; confirm above
 df$htn <- as.integer(df$SBP >= 140 | df$DBP >= 90 | df$antihtnbase == 1)
-df$hld <- as.integer(df$cholmed == 1 | df$ldl >= 4.9)  # LDL >= 190 mg/dL
+df$hld <- as.integer(df$cholmed == 1 | df$ldl >= 190)  # lipids are in mg/dL
 
 cont <- c(Age = "age", BMI = "BMI", SBP = "SBP", DBP = "DBP", TotalChol = "tchol",
 	LDL = "ldl", HDL = "hdl", TG = "tg")
