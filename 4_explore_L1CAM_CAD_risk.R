@@ -33,9 +33,9 @@ print(summary(df_inc$cad_inc))
 # print out correlation of L1CAM and CAD PRS
 
 # make linear regression with L1CAM and CAD PRS as covariates
-cad_model <- lm(as.formula("cad_inc ~ cad_prs + L1CAM + age + Sex_numeric + cad_prs:L1CAM"), data = df_inc)
+cad_model <- glm(as.formula("cad_inc ~ cad_prs + L1CAM + age + Sex_numeric + cad_prs:L1CAM"), family = binomial, data = df_inc)
 summary_model <- summary(cad_model)
-ci <- confint(cad_model)
+ci <- confint.default(cad_model)
 
 features = c("cad_prs:L1CAM", "cad_prs", "L1CAM")
 
@@ -43,7 +43,7 @@ for (feature in features) {
 	print(feature)
 	est <- summary_model$coefficients[feature, "Estimate"]
 	se <- summary_model$coefficients[feature, "Std. Error"]
-	pval <- summary_model$coefficients[feature, "Pr(>|t|)"]
+	pval <- summary_model$coefficients[feature, "Pr(>|z|)"]
 	ci_lower <- ci[feature, 1]
 	ci_upper <- ci[feature, 2]
 	print(paste("coeff estimate", as.character(est)))
