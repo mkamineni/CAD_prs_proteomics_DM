@@ -71,6 +71,8 @@ df_inc$low_L1CAM <- ifelse(df_inc$L1CAM < median(df_inc$L1CAM), 1, 0)
 df_inc$group <- factor(interaction(df_inc$high_cad_prs, df_inc$low_L1CAM),
 			levels = c("0.0", "0.1", "1.0", "1.1"),
 			labels = c("LowPRS_HighL1CAM", "LowPRS_LowL1CAM", "HighPRS_HighL1CAM", "HighPRS_LowL1CAM"))
+# n and incident CAD events per group
+print(table(group = df_inc$group, cad_inc = df_inc$cad_inc))
 model <- glm(cad_inc ~ group + age + Sex_numeric, family = binomial, data = df_inc)
 print(exp(cbind(OR = coef(model), confint(model))))
 
