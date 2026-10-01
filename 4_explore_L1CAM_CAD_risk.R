@@ -63,6 +63,11 @@ model_L1CAM <- glm(cad_inc ~ cad_prs + L1CAM + age + Sex_numeric, family = binom
 print(coef(summary(model))["cad_prs", ])
 print(coef(summary(model_L1CAM))["cad_prs", ])
 
+# L1CAM's own association with incident CAD, adjusted for CAD PRS, age, and sex (per SD of L1CAM)
+l1 <- coef(summary(model_L1CAM))["L1CAM", ]
+print(c(OR = exp(l1[["Estimate"]]), lower = exp(l1[["Estimate"]] - 1.96 * l1[["Std. Error"]]),
+	upper = exp(l1[["Estimate"]] + 1.96 * l1[["Std. Error"]]), p = l1[["Pr(>|z|)"]]))
+
 
 
 # In diabetics only
